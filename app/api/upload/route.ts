@@ -20,11 +20,11 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    return new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
+    return new Promise<NextResponse>((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type: 'raw', // Use 'raw' for documents (PDF, DOCX) to get correct URLs
-          folder: 'codemailer_resumes', // Optional: organize uploads
+          folder: 'codemailer_resumes', 
         },
         (error, result) => {
           if (error) {
@@ -34,7 +34,8 @@ export async function POST(req: Request) {
             resolve(NextResponse.json({ url: result?.secure_url, public_id: result?.public_id }));
           }
         }
-      ).end(buffer);
+      );
+      uploadStream.end(buffer);
     });
 
   } catch (error) {
