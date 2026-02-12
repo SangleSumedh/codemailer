@@ -1,0 +1,22 @@
+{
+  "id": "1SxWSmokYqFVI0ELSGNV",
+  "body": "Hi [HR_Name],\nI came across opportunities at [Company_Name] and wanted to express my interest. I’m a final-year Computer Engineering student with hands-on experience building scalable backend systems and REST APIs.\nCurrently, I’m working on production-grade features including role-based systems and high-concurrency testing platforms at Gryphon Academy as Software Engineer - Intern. I would love to bring this experience to your team.\n\nPlease find my resume attached. Looking forward to connecting.\n\nRegards,\nSumedh Sangle",
+  "updatedAt": {
+    "type": "firestore/timestamp/1.0",
+    "seconds": 1770894140,
+    "nanoseconds": 692000000
+  },
+  "name": "Cold Mail 1",
+  "subject": "Application for [Job_Title]",
+  "attachments": [
+    {
+      "url": "https://res.cloudinary.com/dv7rwot2m/raw/upload/v1770883112/codemailer_resumes/gcutm8zs3rkvxbshs1n8",
+      "name": "resume.pdf"
+    }
+  ],
+  "createdAt": {
+    "type": "firestore/timestamp/1.0",
+    "seconds": 1770879396,
+    "nanoseconds": 728000000
+  }
+}

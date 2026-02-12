@@ -11,6 +11,7 @@
   "dependencies": {
     "cloudinary": "^2.9.0",
     "crypto-js": "^4.2.0",
+    "deep-email-validator": "^0.1.21",
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",
     "lucide-react": "^0.563.0",

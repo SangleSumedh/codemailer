@@ -6,7 +6,23 @@ import { useData, Template, Resume } from "@/contexts/DataContext";
 import { db } from "@/lib/firebase";
 import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import React, { useState, useRef } from "react";
-import { Copy, Edit, Plus, Trash2, X, Save, ChevronDown, Paperclip, Loader2, FileText, Upload } from "lucide-react";
+import { Copy, Edit, Plus, Trash2, X, Save, ChevronDown, Paperclip, Loader2, FileText, Upload, Download, Import } from "lucide-react";
+
+const DEFAULT_TEMPLATES = [
+  {
+    name: "Cold Mail 1",
+    subject: "Application for [Job_Title]",
+    body: `Hi [HR_Name],
+I came across opportunities at [Company_Name] and wanted to express my interest. I’m a final-year Computer Engineering student with hands-on experience building scalable backend systems and REST APIs.
+Currently, I’m working on production-grade features including role-based systems and high-concurrency testing platforms at Gryphon Academy as Software Engineer - Intern. I would love to bring this experience to your team.
+
+Please find my resume attached. Looking forward to connecting.
+
+Regards,
+Sumedh Sangle`,
+    attachments: [] // Attachments are specific to the user, so we leave this empty for the default template
+  }
+];
 
 const ALLOWED_VARIABLES = [
   "[HR_Name]",
@@ -25,6 +41,7 @@ export default function TemplatesTab() {
   
   // Templates State
   const [isEditing, setIsEditing] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState<Partial<Template>>({ name: "", subject: "", body: "", attachments: [] });
 
   // Resumes State
@@ -139,6 +156,47 @@ export default function TemplatesTab() {
     }
   };
 
+  const exportTemplate = (template: Template) => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(template, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", `${template.name.replace(/\s+/g, '_')}.json`);
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+  };
+
+  const handleImportFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const json = JSON.parse(event.target?.result as string);
+              // Open editor with imported data (removing ID so it creates new)
+              setCurrentTemplate({
+                  name: json.name || "",
+                  subject: json.subject || "",
+                  body: json.body || "",
+                  attachments: [] // We don't import attachments as URLs might be invalid/external
+              });
+              setShowImportModal(false);
+              setIsEditing(true);
+          } catch (error) {
+              alert("Invalid JSON file");
+          }
+      };
+      reader.readAsText(file);
+      e.target.value = ""; // reset
+  };
+
+  const loadDefaultTemplate = (template: any) => {
+      setCurrentTemplate({ ...template });
+      setShowImportModal(false);
+      setIsEditing(true);
+  };
+
   const startEdit = (template?: Template) => {
     if (template) {
       setCurrentTemplate({ ...template, attachments: template.attachments || [] });
@@ -237,6 +295,8 @@ export default function TemplatesTab() {
          </div>
 
          {activeTab === 'templates' && (
+           <>
+           <div className="flex items-center gap-2">
             <button
               onClick={() => startEdit()}
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
@@ -244,6 +304,15 @@ export default function TemplatesTab() {
               <Plus className="h-4 w-4" />
               Create Template
             </button>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="ml-2 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-gray-300 dark:hover:bg-zinc-700"
+            >
+              <Import className="h-4 w-4" />
+              Import
+            </button>
+          </div>
+          </> // Added fragment to wrap buttons
          )}
          {activeTab === 'resumes' && (
              <label className={`flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 cursor-pointer ${uploadingResume ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -275,6 +344,9 @@ export default function TemplatesTab() {
                                     </button>
                                     <button onClick={() => deleteTemplate(t.id)} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400">
                                         <Trash2 className="h-4 w-4" />
+                                    </button>
+                                    <button onClick={() => exportTemplate(t)} className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400" title="Export JSON">
+                                        <Download className="h-4 w-4" />
                                     </button>
                                 </div>
                             </div>
@@ -459,6 +531,63 @@ export default function TemplatesTab() {
                         <Save className="h-4 w-4" />
                         Save Template
                     </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* --- IMPORT MODAL --- */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900 dark:border dark:border-zinc-800">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold dark:text-white">Import Template</h2>
+                    <button onClick={() => setShowImportModal(false)} className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-zinc-800">
+                        <X className="h-5 w-5 dark:text-white" />
+                    </button>
+                </div>
+
+                <div className="space-y-6">
+                    {/* Option 1: Default Templates */}
+                    <div>
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Start with a Default Template</h3>
+                        <div className="grid gap-2">
+                            {DEFAULT_TEMPLATES.map((t, idx) => (
+                                <button 
+                                    key={idx}
+                                    onClick={() => loadDefaultTemplate(t)}
+                                    className="flex items-center justify-between w-full p-3 text-left rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-700 dark:hover:bg-zinc-800 transition-all group"
+                                >
+                                    <div>
+                                        <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
+                                        <p className="text-xs text-gray-500 truncate max-w-[250px]">{t.subject}</p>
+                                    </div>
+                                    <Plus className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-gray-200 dark:border-zinc-700" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-white px-2 text-gray-500 dark:bg-zinc-900">Or</span>
+                        </div>
+                    </div>
+
+                    {/* Option 2: Upload JSON */}
+                    <div>
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Upload JSON File</h3>
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 dark:border-zinc-700 transition-colors">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Click to upload template JSON</p>
+                            </div>
+                            <input type="file" className="hidden" accept=".json" onChange={handleImportFileUpload} />
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
