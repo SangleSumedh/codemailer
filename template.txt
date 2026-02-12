@@ -1,0 +1,12 @@
+Subject: Application for Backend / Full Stack Role
+
+Hi [HR Name],
+
+I came across opportunities at [Company Name] and wanted to express my interest. I’m a final-year Computer Engineering student (CGPA: 8.86) with hands-on experience building scalable backend systems and REST APIs.
+
+Currently, I’m working on production-grade features including role-based systems and high-concurrency testing platforms. I would love to bring this experience to your team.
+
+Please find my resume attached. Looking forward to connecting.
+
+Regards,
+Sumedh Sangle

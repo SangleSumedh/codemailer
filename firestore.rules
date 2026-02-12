@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================================
+    // Portfolio Rules (Existing)
+    // ==========================================
+    match /testimonials/{testimonialId} {
+      // Anyone can read active testimonials
+      allow read: if resource.data.status == "active" || 
+                  (request.auth != null && request.auth.token.email == "sanglesumedh15@gmail.com");
+      
+      // Anyone can create (submit for review)
+      allow create: if request.auth != null;
+      
+      // ONLY YOU can edit, delete, or change status
+      allow update, delete: if request.auth != null && 
+                             request.auth.token.email == "sanglesumedh15@gmail.com";
+    }
+
+    // ==========================================
+    // CodeMailer Rules (New)
+    // ==========================================
+    
+    // User Document: Users can read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Stats Subcollection
+      match /stats/{statId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Templates Subcollection
+      match /templates/{templateId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Bulk Batches (History) Subcollection
+      match /bulk_batches/{batchId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Replies Subcollection
+      match /replies/{replyId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Resumes Subcollection
+      match /resumes/{resumeId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
