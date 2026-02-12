@@ -2,19 +2,12 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useData, Template } from "@/contexts/DataContext";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, query, orderBy, doc, increment, updateDoc, getDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { Upload, FileSpreadsheet, Send, Play, AlertCircle, CheckCircle, Loader2, Download, FileJson } from "lucide-react";
-
-interface Template {
-  id: string;
-  name: string;
-  subject: string;
-  body: string;
-  attachments?: { name: string; url: string }[];
-}
 
 interface Recipient {
   [key: string]: any;
@@ -22,7 +15,7 @@ interface Recipient {
 
 export default function SenderTab() {
   const { user } = useAuth();
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const { templates, fetchBatches, fetchStats } = useData();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [fileData, setFileData] = useState<any[]>([]);
@@ -36,16 +29,6 @@ export default function SenderTab() {
   const [errorCount, setErrorCount] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
   const [totalRecipients, setTotalRecipients] = useState(0);
-
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "users", user.uid, "templates"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Template));
-      setTemplates(data);
-    });
-    return () => unsub();
-  }, [user]);
 
   // Extract variables from template string
   const extractVariables = (text: string) => {
@@ -239,6 +222,7 @@ export default function SenderTab() {
 
     const BATCH_SIZE = 3;
     const total = recipients.length;
+    let successCount = 0; // Local counter (not React state) for accurate tracking
 
     for (let i = 0; i < total; i += BATCH_SIZE) {
       const batch = recipients.slice(i, i + BATCH_SIZE);
@@ -272,12 +256,8 @@ export default function SenderTab() {
 
           if (!res.ok) throw new Error('Failed to send');
           
+          successCount++;
           setSentCount(prev => prev + 1);
-          // Update stats in firestore
-          await updateDoc(doc(db, "users", user.uid, "stats", "general"), {
-            sent: increment(1)
-          });
-
         } catch (error) {
           setErrorCount(prev => prev + 1);
           setLogs(prev => [`Failed to send to ${email}`, ...prev]);
@@ -290,6 +270,14 @@ export default function SenderTab() {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
+    // Update stats once with actual success count (1 write instead of N)
+    if (successCount > 0) {
+      const { increment } = await import("firebase/firestore");
+      await updateDoc(doc(db, "users", user.uid, "stats", "general"), {
+        sent: increment(successCount)
+      });
+    }
+
     setSending(false);
     // Modal stays open so user can see results — they close it manually
     
@@ -298,9 +286,12 @@ export default function SenderTab() {
       templateId: selectedTemplateId,
       templateName: template.name,
       totalRecipients: total,
-      sentCount: sentCount,
+      sentCount: successCount,
       timestamp: new Date()
     });
+
+    // Refresh shared data
+    await Promise.all([fetchBatches(), fetchStats()]);
   };
 
   return (

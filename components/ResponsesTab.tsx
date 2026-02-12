@@ -2,45 +2,25 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useData } from "@/contexts/DataContext";
 import { db } from "@/lib/firebase";
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { deleteDoc, doc } from "firebase/firestore";
+import { useState } from "react";
 import { Trash2, MessageSquare, Briefcase, Calendar, MessageCircle, Search } from "lucide-react";
-
-interface Reply {
-  id: string;
-  hrName: string;
-  companyName: string;
-  date: Timestamp;
-  status: string;
-  replyContent?: string;
-  notes?: string;
-}
 
 export default function ResponsesTab() {
   const { user } = useAuth();
-  const [replies, setReplies] = useState<Reply[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { replies, loading, fetchReplies } = useData();
   const [filterHR, setFilterHR] = useState("");
   const [filterCompany, setFilterCompany] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDate, setFilterDate] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "users", user.uid, "replies"), orderBy("date", "desc"));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reply));
-      setReplies(data);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [user]);
-
   const handleDelete = async (id: string) => {
     if (!user || !confirm("Delete this response record? This will NOT decrement your global stats manually.")) return;
     try {
       await deleteDoc(doc(db, "users", user.uid, "replies", id));
+      await fetchReplies(); // Refresh shared data
     } catch (error) {
       console.error("Error deleting reply:", error);
     }

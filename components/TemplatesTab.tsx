@@ -2,32 +2,11 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useData, Template, Resume } from "@/contexts/DataContext";
 import { db } from "@/lib/firebase";
-import { addDoc, collection, deleteDoc, doc, getDocs, query, updateDoc, orderBy } from "firebase/firestore";
-import React, { useCallback, useEffect, useState, useRef } from "react";
+import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import React, { useState, useRef } from "react";
 import { Copy, Edit, Plus, Trash2, X, Save, ChevronDown, Paperclip, Loader2, FileText, Upload } from "lucide-react";
-
-interface Attachment {
-  name: string;
-  url: string;
-}
-
-interface Template {
-  id: string;
-  name: string;
-  subject: string;
-  body: string;
-  attachments?: Attachment[];
-  createdAt: any;
-}
-
-interface Resume {
-  id: string;
-  name: string;
-  url: string;
-  public_id: string;
-  createdAt: any;
-}
 
 const ALLOWED_VARIABLES = [
   "[HR_Name]",
@@ -41,46 +20,20 @@ const ALLOWED_VARIABLES = [
 
 export default function TemplatesTab() {
   const { user } = useAuth();
+  const { templates, resumes, loading, fetchTemplates, fetchResumes } = useData();
   const [activeTab, setActiveTab] = useState<'templates' | 'resumes'>('templates');
   
   // Templates State
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState<Partial<Template>>({ name: "", subject: "", body: "", attachments: [] });
 
   // Resumes State
-  const [resumes, setResumes] = useState<Resume[]>([]);
-  const [loadingResumes, setLoadingResumes] = useState(true);
   const [uploadingResume, setUploadingResume] = useState(false);
 
   // Refs
   const subjectRef = useRef<HTMLTextAreaElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [lastFocusedField, setLastFocusedField] = useState<'subject' | 'body' | null>(null);
-
-  // Fetch helpers
-  const fetchTemplates = useCallback(async () => {
-    if (!user) return;
-    const q = query(collection(db, "users", user.uid, "templates"), orderBy("createdAt", "desc"));
-    const snapshot = await getDocs(q);
-    setTemplates(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Template)));
-    setLoadingTemplates(false);
-  }, [user]);
-
-  const fetchResumes = useCallback(async () => {
-    if (!user) return;
-    const q = query(collection(db, "users", user.uid, "resumes"), orderBy("createdAt", "desc"));
-    const snapshot = await getDocs(q);
-    setResumes(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Resume)));
-    setLoadingResumes(false);
-  }, [user]);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchTemplates();
-    fetchResumes();
-  }, [fetchTemplates, fetchResumes]);
 
 
   // --- Resume Logic ---
@@ -304,7 +257,7 @@ export default function TemplatesTab() {
       {/* --- TEMPLATES VIEW --- */}
       {activeTab === 'templates' && (
         <div className="animate-in fade-in slide-in-from-left-4 duration-300">
-             {loadingTemplates ? <p className="text-center p-8 text-gray-500">Loading templates...</p> : (
+             {loading ? <p className="text-center p-8 text-gray-500">Loading templates...</p> : (
                 <>
                  {templates.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-gray-300 py-12 text-center dark:border-zinc-700">
@@ -348,7 +301,7 @@ export default function TemplatesTab() {
       {/* --- RESUMES VIEW --- */}
       {activeTab === 'resumes' && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              {loadingResumes ? <p className="text-center p-8 text-gray-500">Loading resumes...</p> : (
+              {loading ? <p className="text-center p-8 text-gray-500">Loading resumes...</p> : (
                 <>
                     {resumes.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-gray-300 py-12 text-center dark:border-zinc-700">

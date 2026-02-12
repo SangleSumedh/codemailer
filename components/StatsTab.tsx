@@ -2,9 +2,10 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useData } from "@/contexts/DataContext";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc, collection, query, orderBy, addDoc, Timestamp, increment, writeBatch } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { doc, collection, addDoc, Timestamp, increment, writeBatch } from "firebase/firestore";
+import { useState } from "react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, PieChart, Pie, Cell, Legend 
@@ -40,10 +41,7 @@ interface ResponseRow {
 
 export default function StatsTab() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<Stats>({ sent: 0, replies: 0 });
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [replies, setReplies] = useState<Reply[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { stats, batches, replies, loading, fetchReplies, fetchStats } = useData();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('7d');
   
   // Modal State
@@ -55,38 +53,6 @@ export default function StatsTab() {
   const [responseRows, setResponseRows] = useState<ResponseRow[]>([
     { id: 'form', hrName: '', companyName: '', status: 'Positive', replyContent: '' }
   ]);
-
-  useEffect(() => {
-    if (!user) return;
-    
-    // 1. Fetch General Stats (Real-time)
-    const statsUnsub = onSnapshot(doc(db, "users", user.uid, "stats", "general"), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data() as Stats;
-        setStats(data);
-      }
-    });
-
-    // 2. Fetch Bulk Batches History
-    const batchesQuery = query(collection(db, "users", user.uid, "bulk_batches"), orderBy("timestamp", "asc"));
-    const batchesUnsub = onSnapshot(batchesQuery, (snapshot) => {
-      const b = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Batch));
-      setBatches(b);
-      setLoading(false);
-    });
-
-    // 3. Fetch Replies (for breakdown & top companies)
-    const repliesQuery = query(collection(db, "users", user.uid, "replies"), orderBy("date", "desc"));
-    const repliesUnsub = onSnapshot(repliesQuery, (snapshot) => {
-      setReplies(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Reply)));
-    });
-
-    return () => {
-      statsUnsub();
-      batchesUnsub();
-      repliesUnsub();
-    };
-  }, [user]);
 
   const addRow = () => {
     // Validate current input (index 0)
@@ -163,6 +129,9 @@ export default function StatsTab() {
       });
 
       await batch.commit();
+
+      // Refresh shared data
+      await Promise.all([fetchReplies(), fetchStats()]);
 
       alert(`Saved ${queue.length} responses!`);
       setIsModalOpen(false);
