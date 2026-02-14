@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
-import { Upload, FileSpreadsheet, Send, Play, AlertCircle, CheckCircle, Loader2, Download, FileJson } from "lucide-react";
+import { Upload, FileSpreadsheet, Send, Play, AlertCircle, CheckCircle, Loader2, Download, FileJson, Plus, Trash2, Users, UserPlus } from "lucide-react";
 
 interface Recipient {
   [key: string]: any;
@@ -29,6 +29,11 @@ export default function SenderTab() {
   const [errorCount, setErrorCount] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
   const [totalRecipients, setTotalRecipients] = useState(0);
+
+  // Manual entry mode state
+  const [sendMode, setSendMode] = useState<'bulk' | 'manual'>('bulk');
+  const [manualFormValues, setManualFormValues] = useState<Record<string, string>>({});
+  const [manualRecipients, setManualRecipients] = useState<Recipient[]>([]);
 
   // Extract variables from template string
   const extractVariables = (text: string) => {
@@ -154,6 +159,36 @@ export default function SenderTab() {
     return { subject, body };
   };
 
+  // Helper to add a manual recipient row
+  const addManualRecipient = () => {
+    const email = manualFormValues['hr_email']?.trim();
+    if (!email) {
+      alert('Please enter a recipient email.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    const newRecipient: Recipient = { ...manualFormValues };
+    setManualRecipients(prev => [...prev, newRecipient]);
+    // Clear form but keep template variable keys
+    const cleared: Record<string, string> = {};
+    Object.keys(manualFormValues).forEach(k => cleared[k] = '');
+    setManualFormValues(cleared);
+  };
+
+  const removeManualRecipient = (index: number) => {
+    setManualRecipients(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // When manual recipients change, sync to the main recipients state so sendBulkEmails works
+  useEffect(() => {
+    if (sendMode === 'manual') {
+      setRecipients(manualRecipients);
+    }
+  }, [manualRecipients, sendMode]);
+
   // Effect to update preview based on selection
   useEffect(() => {
     const template = templates.find(t => t.id === selectedTemplateId);
@@ -162,7 +197,31 @@ export default function SenderTab() {
         return;
     }
 
-    // If recipients loaded, show first recipient data
+    // In manual mode, show preview from current form values
+    if (sendMode === 'manual') {
+        const hasAnyValue = Object.values(manualFormValues).some(v => v.trim());
+        if (hasAnyValue) {
+            const previewRecipient: Recipient = { ...manualFormValues };
+            const { subject, body } = generateAndReplace(template, previewRecipient);
+            const htmlBody = body.replace(/\n/g, "<br/>");
+            const email = manualFormValues['hr_email'] || 'recipient@example.com';
+            setPreviewHtml(`
+                <div class="border-b pb-2 mb-2"><strong>To:</strong> ${email}</div>
+                <div class="border-b pb-2 mb-2"><strong>Subject:</strong> ${subject}</div>
+                <div class="whitespace-pre-wrap">${htmlBody}</div>
+            `);
+        } else {
+            const htmlBody = template.body.replace(/\n/g, "<br/>");
+            setPreviewHtml(`
+                <div class="border-b pb-2 mb-2"><strong>Subject:</strong> ${template.subject}</div>
+                <div class="whitespace-pre-wrap text-gray-500 italic">Body preview (placeholders will be replaced):</div>
+                <div class="whitespace-pre-wrap">${htmlBody}</div>
+            `);
+        }
+        return;
+    }
+
+    // Bulk mode: If recipients loaded, show first recipient data
     if (recipients.length > 0) {
         const firstRecipient = recipients[0];
         const { subject, body } = generateAndReplace(template, firstRecipient);
@@ -185,7 +244,7 @@ export default function SenderTab() {
             <div class="whitespace-pre-wrap">${htmlBody}</div>
         `);
     }
-  }, [selectedTemplateId, recipients]);
+  }, [selectedTemplateId, recipients, sendMode, manualFormValues]);
 
 
   const sendBulkEmails = async () => {
@@ -313,6 +372,15 @@ export default function SenderTab() {
                         setSelectedTemplateId(e.target.value);
                         setRecipients([]); // Reset recipients on template change
                         setFileName("");
+                        setManualRecipients([]);
+                        // Initialize manual form with template variables
+                        const tmpl = templates.find(t => t.id === e.target.value);
+                        if (tmpl) {
+                          const vars = getTemplateVariables(tmpl);
+                          const initial: Record<string, string> = { hr_email: '' };
+                          vars.forEach(v => initial[v] = '');
+                          setManualFormValues(initial);
+                        }
                     }}
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 >
@@ -322,31 +390,41 @@ export default function SenderTab() {
                     ))}
                 </select>
 
+
+                {/* Mode Toggle */}
                 {selectedTemplateId && (
                     <div className="mt-6 border-t border-gray-100 pt-4 dark:border-zinc-800">
-                        <p className="text-sm text-gray-500 mb-3">Download a sample file for this template:</p>
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={() => downloadSample('xlsx')}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100 dark:border-green-900/30 dark:bg-green-900/20 dark:text-green-400"
+                        <p className="text-sm text-gray-500 mb-3">How do you want to add recipients?</p>
+                        <div className="flex rounded-lg border border-gray-200 dark:border-zinc-700 overflow-hidden">
+                            <button
+                                onClick={() => { setSendMode('bulk'); setRecipients([]); setManualRecipients([]); }}
+                                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                                    sendMode === 'bulk'
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-zinc-900 dark:text-gray-400 dark:hover:bg-zinc-800'
+                                }`}
                             >
-                                <FileSpreadsheet className="h-4 w-4" />
-                                Sample Excel
+                                <Upload className="h-4 w-4" />
+                                Bulk File
                             </button>
-                            <button 
-                                onClick={() => downloadSample('json')}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900/30 dark:bg-amber-900/20 dark:text-amber-400"
+                            <button
+                                onClick={() => { setSendMode('manual'); setRecipients([]); setFileName(''); }}
+                                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                                    sendMode === 'manual'
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-zinc-900 dark:text-gray-400 dark:hover:bg-zinc-800'
+                                }`}
                             >
-                                <FileJson className="h-4 w-4" />
-                                Sample JSON
+                                <UserPlus className="h-4 w-4" />
+                                Manual Entry
                             </button>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Step 2: Upload File (Only visible after template selected) */}
-            {selectedTemplateId && (
+            {/* Step 2: Upload File (Bulk) or Manual Entry Form */}
+            {selectedTemplateId && sendMode === 'bulk' && (
                 <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-all hover:shadow-md animate-in slide-in-from-top-4 duration-500">
                     <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600 dark:bg-blue-900 dark:text-blue-300">2</span>
@@ -375,6 +453,111 @@ export default function SenderTab() {
                             )}
                         </div>
                     </div>
+                    <div className="mt-4 border-t border-gray-100 pt-4 dark:border-zinc-800">
+                        <p className="text-sm text-gray-500 mb-3">Download a sample file for this template:</p>
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => downloadSample('xlsx')}
+                                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100 dark:border-green-900/30 dark:bg-green-900/20 dark:text-green-400"
+                            >
+                                <FileSpreadsheet className="h-4 w-4" />
+                                Sample Excel
+                            </button>
+                            <button 
+                                onClick={() => downloadSample('json')}
+                                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900/30 dark:bg-amber-900/20 dark:text-amber-400"
+                            >
+                                <FileJson className="h-4 w-4" />
+                                Sample JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Step 2: Manual Entry Form */}
+            {selectedTemplateId && sendMode === 'manual' && (
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-all hover:shadow-md animate-in slide-in-from-top-4 duration-500">
+                    <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600 dark:bg-blue-900 dark:text-blue-300">2</span>
+                        Add Recipients
+                    </h3>
+
+                    {/* Input Row */}
+                    <div className="space-y-3">
+                        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(Object.keys(manualFormValues).length, 4)}, 1fr)` }}>
+                            {Object.keys(manualFormValues).map(key => (
+                                <div key={key}>
+                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 capitalize">
+                                        {key === 'hr_email' ? 'Email *' : key}
+                                    </label>
+                                    <input
+                                        type={key === 'hr_email' ? 'email' : 'text'}
+                                        value={manualFormValues[key]}
+                                        onChange={(e) => setManualFormValues(prev => ({ ...prev, [key]: e.target.value }))}
+                                        placeholder={key === 'hr_email' ? 'name@company.com' : `Enter ${key}`}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManualRecipient(); } }}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            onClick={addManualRecipient}
+                            className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors dark:bg-blue-900/20 dark:border-blue-900/30 dark:text-blue-400"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Add Recipient
+                        </button>
+                    </div>
+
+                    {/* Recipients Table */}
+                    {manualRecipients.length > 0 && (
+                        <div className="mt-5">
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                    <Users className="h-4 w-4" />
+                                    {manualRecipients.length} recipient{manualRecipients.length !== 1 ? 's' : ''} added
+                                </p>
+                                <button
+                                    onClick={() => { setManualRecipients([]); setRecipients([]); }}
+                                    className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                                >
+                                    Clear all
+                                </button>
+                            </div>
+                            <div className="rounded-lg border border-gray-200 dark:border-zinc-700 overflow-hidden">
+                                <div className="overflow-x-auto max-h-48 overflow-y-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 dark:bg-zinc-800 sticky top-0">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">#</th>
+                                                {Object.keys(manualFormValues).map(key => (
+                                                    <th key={key} className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 capitalize">{key}</th>
+                                                ))}
+                                                <th className="px-3 py-2 w-10"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                                            {manualRecipients.map((r, i) => (
+                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                                    <td className="px-3 py-2 text-gray-400 text-xs">{i + 1}</td>
+                                                    {Object.keys(manualFormValues).map(key => (
+                                                        <td key={key} className="px-3 py-2 text-gray-700 dark:text-gray-300 truncate max-w-[150px]">{r[key] || '-'}</td>
+                                                    ))}
+                                                    <td className="px-3 py-2">
+                                                        <button onClick={() => removeManualRecipient(i)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
