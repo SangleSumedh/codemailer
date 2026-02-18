@@ -6,15 +6,17 @@ import { useData } from "@/contexts/DataContext";
 import { db } from "@/lib/firebase";
 import { deleteDoc, doc } from "firebase/firestore";
 import { useState } from "react";
-import { Trash2, MessageSquare, Briefcase, Calendar, MessageCircle, Search } from "lucide-react";
+import { Trash2, MessageSquare, Briefcase, Calendar, Search, Mail, Users } from "lucide-react";
 
 export default function ResponsesTab() {
   const { user } = useAuth();
-  const { replies, loading, fetchReplies } = useData();
+  const { replies, sentEmails, loading, fetchReplies } = useData();
   const [filterHR, setFilterHR] = useState("");
   const [filterCompany, setFilterCompany] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDate, setFilterDate] = useState("");
+
+  const [sentMailFilter, setSentMailFilter] = useState("");
 
   const handleDelete = async (id: string) => {
     if (!user || !confirm("Delete this response record? This will NOT decrement your global stats manually.")) return;
@@ -159,6 +161,101 @@ export default function ResponsesTab() {
                   </tr>
                 ))
               );
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="p-6 border-b border-gray-200 dark:border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sent Mail History</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Review sent emails and recipients shared with.</p>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filter by recipient or subject..."
+                value={sentMailFilter}
+                onChange={(e) => setSentMailFilter(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-zinc-800 dark:text-gray-300">
+              <tr>
+                <th className="px-6 py-3 font-medium">Sent At</th>
+                <th className="px-6 py-3 font-medium">To</th>
+                <th className="px-6 py-3 font-medium">Subject</th>
+                <th className="px-6 py-3 font-medium">Shared With</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
+              {(() => {
+                const filterText = sentMailFilter.toLowerCase();
+                const filteredSent = sentEmails.filter((mail) => {
+                  const shared = (mail.sharedWith || []).join(', ').toLowerCase();
+                  return (
+                    mail.to.toLowerCase().includes(filterText) ||
+                    mail.subject.toLowerCase().includes(filterText) ||
+                    shared.includes(filterText)
+                  );
+                });
+
+                if (filteredSent.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Mail className="h-8 w-8 text-gray-300" />
+                          <p>{sentEmails.length === 0 ? 'No sent mail history yet.' : 'No sent mail matches found.'}</p>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return filteredSent.map((mail) => (
+                  <tr key={mail.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        {mail.sentAt ? new Date(mail.sentAt.toDate()).toLocaleString() : '—'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2 text-gray-900 dark:text-white">
+                        <Mail className="h-4 w-4 text-gray-400" />
+                        {mail.to}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-gray-900 dark:text-white">{mail.subject}</td>
+                    <td className="px-6 py-4">
+                      {mail.sharedWith && mail.sharedWith.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Users className="h-4 w-4 text-gray-400" />
+                          {mail.sharedWith.map((recipient) => (
+                            <span
+                              key={`${mail.id}-${recipient}`}
+                              className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                            >
+                              {recipient}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">No recipients recorded</span>
+                      )}
+                    </td>
+                  </tr>
+                ));
               })()}
             </tbody>
           </table>

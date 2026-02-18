@@ -54,6 +54,15 @@ export interface Stats {
   replies: number;
 }
 
+export interface SentEmail {
+  id: string;
+  to: string;
+  subject: string;
+  html: string;
+  sharedWith: string[];
+  sentAt?: Timestamp;
+}
+
 // ─── Context Shape ───────────────────────────────────────────────────
 
 interface DataContextType {
@@ -62,6 +71,7 @@ interface DataContextType {
   resumes: Resume[];
   replies: Reply[];
   batches: Batch[];
+  sentEmails: SentEmail[];
   stats: Stats;
 
   // Loading states
@@ -72,6 +82,7 @@ interface DataContextType {
   fetchResumes: () => Promise<void>;
   fetchReplies: () => Promise<void>;
   fetchBatches: () => Promise<void>;
+  fetchSentEmails: () => Promise<void>;
   fetchStats: () => Promise<void>;
 }
 
@@ -86,6 +97,7 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
   const [stats, setStats] = useState<Stats>({ sent: 0, replies: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -119,6 +131,14 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
     setBatches(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Batch)));
   }, [user]);
 
+
+  const fetchSentEmails = useCallback(async () => {
+    if (!user) return;
+    const q = query(collection(db, "users", user.uid, "sent_emails"), orderBy("sentAt", "desc"));
+    const snapshot = await getDocs(q);
+    setSentEmails(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as SentEmail)));
+  }, [user]);
+
   const fetchStats = useCallback(async () => {
     if (!user) return;
     const docSnap = await getDoc(doc(db, "users", user.uid, "stats", "general"));
@@ -142,13 +162,14 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
         fetchResumes(),
         fetchReplies(),
         fetchBatches(),
+        fetchSentEmails(),
         fetchStats(),
       ]);
       setLoading(false);
     };
 
     loadAll();
-  }, [user, fetchTemplates, fetchResumes, fetchReplies, fetchBatches, fetchStats]);
+  }, [user, fetchTemplates, fetchResumes, fetchReplies, fetchBatches, fetchSentEmails, fetchStats]);
 
   return (
     <DataContext.Provider
@@ -157,12 +178,14 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
         resumes,
         replies,
         batches,
+        sentEmails,
         stats,
         loading,
         fetchTemplates,
         fetchResumes,
         fetchReplies,
         fetchBatches,
+        fetchSentEmails,
         fetchStats,
       }}
     >

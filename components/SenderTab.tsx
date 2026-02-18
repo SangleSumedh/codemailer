@@ -15,7 +15,7 @@ interface Recipient {
 
 export default function SenderTab() {
   const { user } = useAuth();
-  const { templates, fetchBatches, fetchStats } = useData();
+  const { templates, fetchBatches, fetchSentEmails, fetchStats } = useData();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [fileData, setFileData] = useState<any[]>([]);
@@ -309,7 +309,8 @@ export default function SenderTab() {
               userId: user.uid,
               userEmail: user.email,
               encryptedAppPassword, // Pass the credential
-              attachments: template.attachments || [] // Pass attachments
+              attachments: template.attachments || [], // Pass attachments
+              sharedWith: [email]
             })
           });
 
@@ -350,7 +351,7 @@ export default function SenderTab() {
     });
 
     // Refresh shared data
-    await Promise.all([fetchBatches(), fetchStats()]);
+    await Promise.all([fetchBatches(), fetchSentEmails(), fetchStats()]);
   };
 
   return (
