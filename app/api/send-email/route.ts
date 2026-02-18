@@ -1,13 +1,13 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { decrypt } from '@/lib/encryption';
 import { createTransport } from '@/lib/email-service';
 
 export async function POST(req: Request) {
   try {
-    const { to, subject, html, userId, userEmail, encryptedAppPassword, attachments } = await req.json();
+    const { to, subject, html, userId, userEmail, encryptedAppPassword, attachments, sharedWith = [] } = await req.json();
 
     if (!to || !subject || !html || !userId || !userEmail || !encryptedAppPassword) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -62,6 +62,18 @@ export async function POST(req: Request) {
       subject,
       html,
       attachments: mailAttachments,
+    });
+
+    const sharedWithList = Array.isArray(sharedWith)
+      ? sharedWith.filter((email: unknown): email is string => typeof email === 'string' && email.trim().length > 0)
+      : [];
+
+    await addDoc(collection(db, 'users', userId, 'sent_emails'), {
+      to,
+      subject,
+      html,
+      sharedWith: sharedWithList,
+      sentAt: serverTimestamp(),
     });
 
     return NextResponse.json({ success: true });
